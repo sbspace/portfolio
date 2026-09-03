@@ -171,14 +171,14 @@ export function DashboardPage({
       <PageHeader
         title="포트폴리오 대시보드"
         action={
-          <div className="flex items-center gap-2 flex-wrap justify-end">
+          <div className="flex min-w-0 w-full max-w-full items-center gap-2 flex-wrap justify-start md:w-auto md:justify-end">
             {/* 뷰 필터 */}
-            <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+            <div className="flex flex-shrink-0 rounded-lg border border-slate-200 overflow-hidden">
               {(['combined', 'beomseok', 'seyeon'] as ViewFilter[]).map((f) => (
                 <button
                   key={f}
                   onClick={() => onViewFilterChange(f)}
-                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
                     viewFilter === f
                       ? 'bg-indigo-600 text-white'
                       : 'text-slate-600 hover:bg-slate-50'
@@ -188,12 +188,13 @@ export function DashboardPage({
                 </button>
               ))}
             </div>
-            <Button variant="secondary" size="sm" onClick={onFetchPrices} disabled={loading}>
+            <Button className="whitespace-nowrap" variant="secondary" size="sm" onClick={onFetchPrices} disabled={loading}>
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
               {loading ? '조회 중…' : '새로고침'}
             </Button>
             <Button
               size="sm"
+              className="whitespace-nowrap"
               onClick={handleSaveWithExport}
               disabled={!prices || loading || saveStatus === 'saving'}
             >
@@ -260,14 +261,14 @@ export function DashboardPage({
         <div className="bg-slate-900 rounded-xl p-5 text-white shadow-sm">
           <p className="text-slate-500 text-xs font-medium uppercase tracking-widest mb-3">{ownerLabel}</p>
           {portfolio.totalKrwWithFixed > portfolio.totalKrw ? (
-            <div className="flex items-end gap-5">
+            <div className="flex flex-col items-start gap-3 md:flex-row md:items-end md:gap-5">
               <div>
                 <p className="text-slate-400 text-xs mb-1">포트폴리오</p>
                 <p className="text-2xl font-bold tracking-tight tabular-nums">
                   {formatKrw(portfolio.totalKrw)}
                 </p>
               </div>
-              <div className="pb-0.5 border-l border-slate-700 pl-5">
+              <div className="w-full border-t border-slate-700 pt-3 md:w-auto md:border-l md:border-t-0 md:pb-0.5 md:pl-5 md:pt-0">
                 <p className="text-slate-500 text-xs mb-1">고정자산 포함</p>
                 <p className="text-lg font-semibold text-slate-300 tabular-nums">
                   {formatKrw(portfolio.totalKrwWithFixed)}
