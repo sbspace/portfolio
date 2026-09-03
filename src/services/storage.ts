@@ -2,6 +2,7 @@ import type { AppState, AppSettings, StockTickerConfig, PersonAssets, FixedAsset
 import { makeDefaultAppState, DEFAULT_SETTINGS } from '@/data/defaults';
 
 const STORAGE_KEY = 'portfolio_app_v1';
+const STATE_API_URL = '/api/state';
 
 // 기본 티커에서 올바른 yahooTicker를 찾아 반환
 const DEFAULT_YAHOO_MAP: Record<string, string> = Object.fromEntries(
@@ -53,19 +54,25 @@ function migrateSettings(raw: Partial<AppSettings>): AppSettings {
   };
 }
 
+export function normalizeState(raw: Partial<AppState>): AppState {
+  const defaults = makeDefaultAppState();
+  return {
+    beomseokAssets: migratePersonAssets(raw.beomseokAssets, defaults.beomseokAssets),
+    seyeonAssets: migratePersonAssets(raw.seyeonAssets, defaults.seyeonAssets),
+    targetWeights: raw.targetWeights ?? defaults.targetWeights,
+    snapshots: raw.snapshots ?? [],
+    settings: migrateSettings((raw.settings ?? {}) as Partial<AppSettings>),
+  };
+}
+
+export function hasStoredState(): boolean {
+  return localStorage.getItem(STORAGE_KEY) !== null;
+}
+
 export function loadState(): AppState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return makeDefaultAppState();
-    const parsed = JSON.parse(raw) as Partial<AppState>;
-    const defaults = makeDefaultAppState();
-    return {
-      beomseokAssets: migratePersonAssets(parsed.beomseokAssets, defaults.beomseokAssets),
-      seyeonAssets:   migratePersonAssets(parsed.seyeonAssets,   defaults.seyeonAssets),
-      targetWeights:  parsed.targetWeights  ?? defaults.targetWeights,
-      snapshots:      parsed.snapshots      ?? [],
-      settings:       migrateSettings((parsed.settings ?? {}) as Partial<AppSettings>),
-    };
+    return raw ? normalizeState(JSON.parse(raw) as Partial<AppState>) : makeDefaultAppState();
   } catch {
     return makeDefaultAppState();
   }
@@ -77,4 +84,26 @@ export function saveState(state: AppState): void {
 
 export function clearState(): void {
   localStorage.removeItem(STORAGE_KEY);
+}
+
+export async function loadRemoteState(): Promise<AppState | null> {
+  const response = await fetch(STATE_API_URL, {
+    headers: { Accept: 'application/json' },
+    cache: 'no-store',
+  });
+
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`D1 load failed: HTTP ${response.status}`);
+
+  return normalizeState((await response.json()) as Partial<AppState>);
+}
+
+export async function saveRemoteState(state: AppState): Promise<void> {
+  const response = await fetch(STATE_API_URL, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(state),
+  });
+
+  if (!response.ok) throw new Error(`D1 save failed: HTTP ${response.status}`);
 }

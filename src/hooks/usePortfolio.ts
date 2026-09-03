@@ -1,17 +1,69 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { AppState, PersonAssets, TargetWeights, PriceData, Owner, Snapshot, AppSettings, StockTickerConfig, CryptoTickerConfig } from '@/types';
-import { loadState, saveState } from '@/services/storage';
+import {
+  hasStoredState,
+  loadRemoteState,
+  loadState,
+  saveRemoteState,
+  saveState,
+} from '@/services/storage';
 import { calcCombinedPortfolio } from '@/utils/portfolio';
 import { makeEmptyPersonAssetsFromConfig } from '@/data/defaults';
 
 export function usePortfolio() {
   const [state, setState] = useState<AppState>(() => loadState());
+  const [remoteReady, setRemoteReady] = useState(false);
+  const initialStateRef = useRef(state);
+  const hadLocalStateRef = useRef(hasStoredState());
 
-  // state가 변경될 때마다 localStorage에 저장
+  useEffect(() => {
+    let cancelled = false;
+
+    async function hydrateFromRemote() {
+      try {
+        const remoteState = await loadRemoteState();
+        if (cancelled) return;
+
+        if (remoteState) {
+          saveState(remoteState);
+          setState(remoteState);
+        } else {
+          await saveRemoteState(initialStateRef.current);
+          if (cancelled) return;
+          if (hadLocalStateRef.current) {
+            console.info('[storage] LocalStorage state migrated to D1');
+          }
+        }
+
+        setRemoteReady(true);
+      } catch (error) {
+        console.warn('[storage] D1 unavailable; using LocalStorage only', error);
+      }
+    }
+
+    void hydrateFromRemote();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // LocalStorage remains the immediate cache and offline fallback.
   useEffect(() => {
     saveState(state);
   }, [state]);
+
+  useEffect(() => {
+    if (!remoteReady) return;
+
+    const timeoutId = window.setTimeout(() => {
+      void saveRemoteState(state).catch((error) => {
+        console.warn('[storage] D1 save failed; state remains in LocalStorage', error);
+      });
+    }, 700);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [state, remoteReady]);
 
   const updateBeomseokAssets = useCallback((assets: PersonAssets) => {
     setState((s) => ({ ...s, beomseokAssets: assets }));
