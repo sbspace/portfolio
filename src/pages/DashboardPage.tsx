@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { RefreshCw, Save, AlertCircle, CheckCircle2, FolderOpen } from 'lucide-react';
 import type { AppState, ViewFilter, PriceData } from '@/types';
 import { calcCombinedPortfolio, calcSinglePersonPortfolio } from '@/utils/portfolio';
-import { formatKrw, formatPercent, formatStockPrice, formatCryptoPrice } from '@/utils/formatting';
+import { formatKrw, formatManWon, formatPercent, formatStockPrice, formatCryptoPrice } from '@/utils/formatting';
 import { captureElementToBlob, generateSnapshotCsv, makeFilename, triggerDownload } from '@/utils/exportFiles';
 import type { HistoryFolder } from '@/hooks/useHistoryFolder';
 import { PortfolioPieChart } from '@/components/dashboard/PortfolioPieChart';
@@ -518,7 +518,7 @@ export function DashboardPage({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
             { label: 'USD/KRW',  value: `${prices.usdKrw.toLocaleString('ko-KR')}원` },
-            { label: '금 현물',  value: `${(prices.goldPerGram / 10000).toFixed(1)}만원/g` },
+            { label: '금 현물',  value: `${formatManWon(prices.goldPerGram / 10000)}만원/g` },
             { label: '내 금 보유', value: formatKrw(portfolio.goldValueKrw) },
             {
               label: '가격 제공',

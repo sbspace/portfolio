@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Download } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { CheckCircle2, Download, RotateCcw, Save } from 'lucide-react';
 import type { PersonAssets, Owner, AppSettings, Snapshot } from '@/types';
 import { formatKrw } from '@/utils/formatting';
 import { Button } from '@/components/ui/Button';
@@ -23,9 +23,21 @@ export function AssetInputPage({
   onUpdateSeyeon,
 }: Props) {
   const [selectedOwner, setSelectedOwner] = useState<Owner>('beomseok');
+  const [beomseokDraft, setBeomseokDraft] = useState<PersonAssets>(beomseokAssets);
+  const [seyeonDraft, setSeyeonDraft] = useState<PersonAssets>(seyeonAssets);
+  const [savedOwner, setSavedOwner] = useState<Owner | null>(null);
 
-  const assets  = selectedOwner === 'beomseok' ? beomseokAssets : seyeonAssets;
+  useEffect(() => setBeomseokDraft(beomseokAssets), [beomseokAssets]);
+  useEffect(() => setSeyeonDraft(seyeonAssets), [seyeonAssets]);
+
+  const assets  = selectedOwner === 'beomseok' ? beomseokDraft : seyeonDraft;
   const onUpdate = selectedOwner === 'beomseok' ? onUpdateBeomseok : onUpdateSeyeon;
+  const setAssets = selectedOwner === 'beomseok' ? setBeomseokDraft : setSeyeonDraft;
+  const ownerLabel = selectedOwner === 'beomseok' ? '범석' : '세연';
+  const updateDraft = (nextAssets: PersonAssets) => {
+    setAssets(nextAssets);
+    setSavedOwner(null);
+  };
 
   const latestSnapshot = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
 
@@ -37,7 +49,7 @@ export function AssetInputPage({
         : latestSnapshot.seyeonAssets;
     const fa = snap.fixedAsset as unknown as Record<string, unknown>;
     const oldInclude = (fa['includeInPortfolio'] as boolean) ?? false;
-    onUpdate({
+    updateDraft({
       ...snap,
       fixedAsset: {
         deposit:         (fa['deposit']         as number)  ?? 0,
@@ -48,34 +60,52 @@ export function AssetInputPage({
     });
   };
 
+  const saveAssets = () => {
+    onUpdate(assets);
+    setSavedOwner(selectedOwner);
+    window.setTimeout(() => setSavedOwner(null), 3000);
+  };
+
+  const resetAssets = () => {
+    if (!window.confirm(`${ownerLabel}님의 모든 자산 입력값을 0으로 초기화할까요?\n저장 버튼을 눌러야 실제 데이터에 반영됩니다.`)) return;
+    updateDraft({
+      ...assets,
+      cash: { liquid: 0, illiquid: 0 },
+      stocks: assets.stocks.map((stock) => ({ ...stock, quantity: 0 })),
+      gold: { grams: 0 },
+      crypto: assets.crypto.map((coin) => ({ ...coin, quantity: 0 })),
+      fixedAsset: { ...assets.fixedAsset, deposit: 0, pension: 0 },
+    });
+  };
+
   const updateCash        = (field: 'liquid' | 'illiquid', value: string) => {
-    onUpdate({ ...assets, cash: { ...assets.cash, [field]: parseFloat(value) || 0 } });
+    updateDraft({ ...assets, cash: { ...assets.cash, [field]: parseFloat(value) || 0 } });
   };
   const updateStockQty    = (id: string, value: string) => {
-    onUpdate({ ...assets, stocks: assets.stocks.map((s) => (s.id === id ? { ...s, quantity: parseInt(value) || 0 } : s)) });
+    updateDraft({ ...assets, stocks: assets.stocks.map((s) => (s.id === id ? { ...s, quantity: parseInt(value) || 0 } : s)) });
   };
   const updateGold        = (value: string) => {
-    onUpdate({ ...assets, gold: { grams: parseFloat(value) || 0 } });
+    updateDraft({ ...assets, gold: { grams: parseFloat(value) || 0 } });
   };
   const updateCryptoQty   = (id: string, value: string) => {
-    onUpdate({ ...assets, crypto: assets.crypto.map((c) => (c.id === id ? { ...c, quantity: parseFloat(value) || 0 } : c)) });
+    updateDraft({ ...assets, crypto: assets.crypto.map((c) => (c.id === id ? { ...c, quantity: parseFloat(value) || 0 } : c)) });
   };
   const updateFixedAmount = (field: 'deposit' | 'pension', value: string) => {
-    onUpdate({ ...assets, fixedAsset: { ...assets.fixedAsset, [field]: parseFloat(value) || 0 } });
+    updateDraft({ ...assets, fixedAsset: { ...assets.fixedAsset, [field]: parseFloat(value) || 0 } });
   };
   const updateFixedInclude = (field: 'depositIncluded' | 'pensionIncluded', value: boolean) => {
-    onUpdate({ ...assets, fixedAsset: { ...assets.fixedAsset, [field]: value } });
+    updateDraft({ ...assets, fixedAsset: { ...assets.fixedAsset, [field]: value } });
   };
 
   const inputCls =
-    'border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent';
+    'min-w-0 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent';
 
   return (
     <div className="space-y-5">
       <PageHeader
         title="자산 입력"
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
             {latestSnapshot && (
               <Button
                 variant="secondary"
@@ -87,6 +117,14 @@ export function AssetInputPage({
                 최근 저장값 불러오기
               </Button>
             )}
+            <Button variant="danger" size="sm" onClick={resetAssets} className="whitespace-nowrap">
+              <RotateCcw size={13} />
+              초기화
+            </Button>
+            <Button size="sm" onClick={saveAssets} className="whitespace-nowrap">
+              {savedOwner === selectedOwner ? <CheckCircle2 size={13} /> : <Save size={13} />}
+              {savedOwner === selectedOwner ? '저장 완료' : '저장'}
+            </Button>
             {/* 소유자 선택 */}
             <div className="flex rounded-lg border border-slate-200 overflow-hidden">
               {(['beomseok', 'seyeon'] as Owner[]).map((o) => (
@@ -104,6 +142,13 @@ export function AssetInputPage({
           </div>
         }
       />
+
+      {savedOwner === selectedOwner && (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <CheckCircle2 size={15} className="flex-shrink-0" />
+          {ownerLabel}님의 자산 입력값을 저장했습니다.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* 현금 */}

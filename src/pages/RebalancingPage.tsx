@@ -17,16 +17,17 @@ interface Props {
 }
 
 type SortDir = 'asc' | 'desc' | null;
+type SortKey = 'currentValueKrw' | 'currentWeight' | 'valueGap';
+type SortState = { key: SortKey | null; dir: SortDir };
 
-function nextSortDir(dir: SortDir): SortDir {
-  if (dir === null) return 'desc';
-  if (dir === 'desc') return 'asc';
-  return null;
+function nextSort(current: SortState, key: SortKey): SortState {
+  if (current.key !== key) return { key, dir: 'desc' };
+  return { key, dir: current.dir === 'desc' ? 'asc' : 'desc' };
 }
 
 export function RebalancingPage({ appState, prices, loading, onFetchPrices }: Props) {
-  const [categoryGapSort, setCategoryGapSort] = useState<SortDir>(null);
-  const [holdingGapSort, setHoldingGapSort] = useState<SortDir>(null);
+  const [categorySort, setCategorySort] = useState<SortState>({ key: null, dir: null });
+  const [holdingSort, setHoldingSort] = useState<SortState>({ key: null, dir: null });
 
   useEffect(() => {
     if (!prices) onFetchPrices();
@@ -52,18 +53,20 @@ export function RebalancingPage({ appState, prices, loading, onFetchPrices }: Pr
   const categoryRows = rows.filter((r) => r.level === 'category');
   const holdingRows  = rows.filter((r) => r.level === 'holding');
 
-  const sortByGap = <T extends { valueGap: number }>(list: T[], dir: SortDir): T[] => {
-    if (dir === null) return list;
-    return [...list].sort((a, b) => (dir === 'asc' ? a.valueGap - b.valueGap : b.valueGap - a.valueGap));
+  const sortRows = <T extends Record<SortKey, number>>(list: T[], sort: SortState): T[] => {
+    if (!sort.key || !sort.dir) return list;
+    return [...list].sort((a, b) => (
+      sort.dir === 'asc' ? a[sort.key!] - b[sort.key!] : b[sort.key!] - a[sort.key!]
+    ));
   };
 
   const sortedCategoryRows = useMemo(
-    () => sortByGap(categoryRows, categoryGapSort),
-    [categoryRows, categoryGapSort]
+    () => sortRows(categoryRows, categorySort),
+    [categoryRows, categorySort]
   );
   const sortedHoldingRows = useMemo(
-    () => sortByGap(holdingRows, holdingGapSort),
-    [holdingRows, holdingGapSort]
+    () => sortRows(holdingRows, holdingSort),
+    [holdingRows, holdingSort]
   );
 
   const SortIcon = ({ dir }: { dir: SortDir }) => {
@@ -90,6 +93,26 @@ export function RebalancingPage({ appState, prices, loading, onFetchPrices }: Pr
   };
 
   const thCls = 'text-xs font-medium text-slate-400 uppercase tracking-wide py-3 whitespace-nowrap';
+  const SortButton = ({
+    label,
+    sortKey,
+    sort,
+    onSort,
+  }: {
+    label: string;
+    sortKey: SortKey;
+    sort: SortState;
+    onSort: (next: SortState) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() => onSort(nextSort(sort, sortKey))}
+      className="inline-flex items-center gap-1 hover:text-slate-600 transition-colors"
+    >
+      {label}
+      <SortIcon dir={sort.key === sortKey ? sort.dir : null} />
+    </button>
+  );
 
   return (
     <div className="space-y-5">
@@ -127,20 +150,13 @@ export function RebalancingPage({ appState, prices, loading, onFetchPrices }: Pr
             <thead className="border-b border-slate-100">
               <tr>
                 <th className={`${thCls} text-left px-5`}>항목</th>
-                <th className={`${thCls} text-right px-3`}>현재 금액</th>
-                <th className={`${thCls} text-right px-3`}>현재 비중</th>
+                <th className={`${thCls} text-right px-3`}><SortButton label="현재 금액" sortKey="currentValueKrw" sort={categorySort} onSort={setCategorySort} /></th>
+                <th className={`${thCls} text-right px-3`}><SortButton label="현재 비중" sortKey="currentWeight" sort={categorySort} onSort={setCategorySort} /></th>
                 <th className={`${thCls} text-right px-3`}>목표 비중</th>
                 <th className={`${thCls} text-right px-3`}>비중 Gap</th>
                 <th className={`${thCls} text-right px-3`}>목표 금액</th>
                 <th className={`${thCls} text-right px-5`}>
-                  <button
-                    type="button"
-                    onClick={() => setCategoryGapSort(nextSortDir(categoryGapSort))}
-                    className="inline-flex items-center gap-1 hover:text-slate-600 transition-colors"
-                  >
-                    금액 Gap
-                    <SortIcon dir={categoryGapSort} />
-                  </button>
+                  <SortButton label="금액 Gap" sortKey="valueGap" sort={categorySort} onSort={setCategorySort} />
                 </th>
               </tr>
             </thead>
@@ -169,19 +185,12 @@ export function RebalancingPage({ appState, prices, loading, onFetchPrices }: Pr
               <thead className="border-b border-slate-100">
                 <tr>
                   <th className={`${thCls} text-left px-5`}>종목</th>
-                  <th className={`${thCls} text-right px-3`}>현재 금액</th>
-                  <th className={`${thCls} text-right px-3`}>현재 비중</th>
+                  <th className={`${thCls} text-right px-3`}><SortButton label="현재 금액" sortKey="currentValueKrw" sort={holdingSort} onSort={setHoldingSort} /></th>
+                  <th className={`${thCls} text-right px-3`}><SortButton label="현재 비중" sortKey="currentWeight" sort={holdingSort} onSort={setHoldingSort} /></th>
                   <th className={`${thCls} text-right px-3`}>목표 비중</th>
                   <th className={`${thCls} text-right px-3`}>목표 금액</th>
                   <th className={`${thCls} text-right px-5`}>
-                    <button
-                      type="button"
-                      onClick={() => setHoldingGapSort(nextSortDir(holdingGapSort))}
-                      className="inline-flex items-center gap-1 hover:text-slate-600 transition-colors"
-                    >
-                      금액 Gap
-                      <SortIcon dir={holdingGapSort} />
-                    </button>
+                    <SortButton label="금액 Gap" sortKey="valueGap" sort={holdingSort} onSort={setHoldingSort} />
                   </th>
                 </tr>
               </thead>

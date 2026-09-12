@@ -15,6 +15,7 @@ interface Props {
 
 export function TargetWeightPage({ targetWeights, settings, includesFixed, onUpdate }: Props) {
   const [draft, setDraft] = useState<TargetWeights>(targetWeights);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     setDraft(targetWeights);
@@ -34,13 +35,30 @@ export function TargetWeightPage({ targetWeights, settings, includesFixed, onUpd
     .reduce((s, [, v]) => s + v, 0);
 
   const setTop = (key: keyof Pick<TargetWeights, 'cash' | 'stock' | 'gold' | 'crypto' | 'fixedAsset'>, value: string) => {
+    setSaved(false);
     setDraft((d) => ({ ...d, [key]: parseFloat(value) || 0 }));
   };
   const setStockWeight  = (ticker: string, value: string) => {
+    setSaved(false);
     setDraft((d) => ({ ...d, stockHoldings: { ...d.stockHoldings, [ticker]: parseFloat(value) || 0 } }));
   };
   const setCryptoWeight = (ticker: string, value: string) => {
+    setSaved(false);
     setDraft((d) => ({ ...d, cryptoHoldings: { ...d.cryptoHoldings, [ticker]: parseFloat(value) || 0 } }));
+  };
+
+  const saveWeights = () => {
+    onUpdate({
+      ...draft,
+      stockHoldings: Object.fromEntries(
+        Object.entries(draft.stockHoldings).filter(([t]) => activeStockTickers.has(t))
+      ),
+      cryptoHoldings: Object.fromEntries(
+        Object.entries(draft.cryptoHoldings).filter(([t]) => activeCryptoTickers.has(t))
+      ),
+    });
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 3000);
   };
 
   const inputCls =
@@ -82,23 +100,19 @@ export function TargetWeightPage({ targetWeights, settings, includesFixed, onUpd
       <PageHeader
         title="목표 비중 설정"
         action={
-          <Button onClick={() => {
-            // 저장 시 삭제된 종목의 orphan 비중값 제거
-            onUpdate({
-              ...draft,
-              stockHoldings: Object.fromEntries(
-                Object.entries(draft.stockHoldings).filter(([t]) => activeStockTickers.has(t))
-              ),
-              cryptoHoldings: Object.fromEntries(
-                Object.entries(draft.cryptoHoldings).filter(([t]) => activeCryptoTickers.has(t))
-              ),
-            });
-          }}>
-            <Save size={14} />
-            저장
+          <Button onClick={saveWeights}>
+            {saved ? <CheckCircle2 size={14} /> : <Save size={14} />}
+            {saved ? '저장 완료' : '저장'}
           </Button>
         }
       />
+
+      {saved && (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <CheckCircle2 size={15} className="flex-shrink-0" />
+          목표 비중을 저장했습니다.
+        </div>
+      )}
 
       {!validation.valid && (
         <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-lg text-sm">

@@ -1,5 +1,5 @@
 import type { PortfolioCalculation, TargetWeights } from '@/types';
-import { formatKrw, formatPercent, formatPercentGap } from '@/utils/formatting';
+import { formatGap, formatKrw, formatPercent, formatPercentGap } from '@/utils/formatting';
 
 interface Props {
   portfolio: PortfolioCalculation;
@@ -45,7 +45,8 @@ export function CategorySummaryTable({ portfolio, targetWeights }: Props) {
             <th className="text-right pb-3 px-2">평가액</th>
             <th className="text-right pb-3 px-2">현재</th>
             <th className="text-right pb-3 px-2">목표</th>
-            <th className="text-right pb-3">Gap</th>
+            <th className="text-right pb-3 px-2">Gap (%)</th>
+            <th className="text-right pb-3">금액 Gap</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-50">
@@ -54,6 +55,7 @@ export function CategorySummaryTable({ portfolio, targetWeights }: Props) {
             const current = categoryWeights[key];
             const target = targetWeights[key];
             const gap = current - target;
+            const valueGap = categoryValues[key] - (totalKrw * target) / 100;
             return (
               <tr key={key} className="hover:bg-slate-50/50 transition-colors">
                 <td className="py-2.5 pr-3">
@@ -71,9 +73,14 @@ export function CategorySummaryTable({ portfolio, targetWeights }: Props) {
                 <td className="py-2.5 px-2 text-right tabular-nums text-slate-400">
                   {formatPercent(target)}
                 </td>
-                <td className="py-2.5 text-right">
+                <td className="py-2.5 px-2 text-right">
                   <span className={`inline-flex px-2 py-0.5 rounded-md text-xs font-semibold tabular-nums ${gapStyle(gap)}`}>
                     {formatPercentGap(gap)}
+                  </span>
+                </td>
+                <td className="py-2.5 text-right whitespace-nowrap">
+                  <span className={`inline-flex px-2 py-0.5 rounded-md text-xs font-semibold tabular-nums ${gapStyle(gap)}`}>
+                    {formatGap(valueGap)}
                   </span>
                 </td>
               </tr>
@@ -86,7 +93,7 @@ export function CategorySummaryTable({ portfolio, targetWeights }: Props) {
             <td className="pt-3 text-right font-semibold text-slate-900 tabular-nums">
               {formatKrw(totalKrw)}
             </td>
-            <td className="pt-3 text-right text-slate-500 tabular-nums" colSpan={3}>100%</td>
+            <td className="pt-3 text-right text-slate-500 tabular-nums" colSpan={4}>100%</td>
           </tr>
         </tfoot>
       </table>

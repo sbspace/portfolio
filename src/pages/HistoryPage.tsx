@@ -20,13 +20,12 @@ interface Props {
   onDelete: (id: string) => void;
 }
 
-const CATEGORY_COLORS = {
-  현금:     '#818cf8',
-  주식:     '#34d399',
-  금:       '#fbbf24',
-  가상화폐: '#a78bfa',
-  고정자산: '#94a3b8',
-};
+const CATEGORY_CHARTS = [
+  { key: 'cash', label: '현금', color: '#818cf8' },
+  { key: 'stock', label: '주식', color: '#34d399' },
+  { key: 'gold', label: '금', color: '#fbbf24' },
+  { key: 'crypto', label: '가상화폐', color: '#a78bfa' },
+] as const;
 
 type TooltipPayload = {
   color?: string;
@@ -53,7 +52,9 @@ const CustomTooltip = ({
           <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
           <span className="text-slate-500">{entry.name}</span>
           <span className="ml-auto font-semibold text-slate-800 tabular-nums">
-            {((entry.value ?? 0)).toLocaleString('ko-KR')}만원
+            {String(entry.dataKey).endsWith('Weight')
+              ? `${(entry.value ?? 0).toFixed(1)}%`
+              : `${Math.round(entry.value ?? 0).toLocaleString('ko-KR')}만원`}
           </span>
         </div>
       ))}
@@ -68,19 +69,21 @@ export function HistoryPage({ snapshots, onDelete }: Props) {
 
   const chartData = sorted.map((snap) => ({
     date:   new Date(snap.createdAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
-    전체:   Math.round(snap.portfolio.totalKrw / 10000),
-    현금:   Math.round(snap.portfolio.categoryValues.cash / 10000),
-    주식:   Math.round(snap.portfolio.categoryValues.stock / 10000),
-    금:     Math.round(snap.portfolio.categoryValues.gold / 10000),
-    가상화폐: Math.round(snap.portfolio.categoryValues.crypto / 10000),
-    ...(snap.portfolio.includesFixedAsset
-      ? { 고정자산: Math.round(snap.portfolio.categoryValues.fixedAsset / 10000) }
-      : {}),
+    portfolioTotal: Math.round(snap.portfolio.totalKrw / 10000),
+    totalWithFixed: Math.round((snap.portfolio.totalKrwWithFixed ?? snap.portfolio.totalKrw) / 10000),
+    cashAmount: Math.round(snap.portfolio.categoryValues.cash / 10000),
+    cashWeight: snap.portfolio.categoryWeights.cash,
+    stockAmount: Math.round(snap.portfolio.categoryValues.stock / 10000),
+    stockWeight: snap.portfolio.categoryWeights.stock,
+    goldAmount: Math.round(snap.portfolio.categoryValues.gold / 10000),
+    goldWeight: snap.portfolio.categoryWeights.gold,
+    cryptoAmount: Math.round(snap.portfolio.categoryValues.crypto / 10000),
+    cryptoWeight: snap.portfolio.categoryWeights.crypto,
   }));
 
   const axisStyle = { fontSize: 11, fill: '#94a3b8' };
 
-  const totalValues = chartData.map((d) => d.전체);
+  const totalValues = chartData.flatMap((d) => [d.portfolioTotal, d.totalWithFixed]);
   const totalMin = Math.min(...totalValues);
   const totalMax = Math.max(...totalValues);
   const totalPadding = Math.max((totalMax - totalMin) * 0.15, totalMax * 0.02, 1);
@@ -118,7 +121,7 @@ export function HistoryPage({ snapshots, onDelete }: Props) {
               tick={axisStyle}
               axisLine={false}
               tickLine={false}
-              tickFormatter={(v) => `${v}만`}
+              tickFormatter={(v) => `${Number(v).toLocaleString('ko-KR')}만`}
               domain={totalDomain}
             />
             <Tooltip content={<CustomTooltip />} />
@@ -129,10 +132,21 @@ export function HistoryPage({ snapshots, onDelete }: Props) {
             />
             <Line
               type="monotone"
-              dataKey="전체"
+              dataKey="portfolioTotal"
+              name="포트폴리오 금액"
               stroke="#6366f1"
               strokeWidth={2.5}
               dot={{ r: 3, fill: '#6366f1' }}
+              activeDot={{ r: 5 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="totalWithFixed"
+              name="고정자산 전체 포함 총자산"
+              stroke="#0f172a"
+              strokeWidth={2}
+              strokeDasharray="5 4"
+              dot={{ r: 3, fill: '#0f172a' }}
               activeDot={{ r: 5 }}
             />
           </LineChart>
@@ -140,39 +154,66 @@ export function HistoryPage({ snapshots, onDelete }: Props) {
       </SectionCard>
 
       {/* 카테고리별 추이 */}
-      {sorted.length > 1 && (
-        <SectionCard title="카테고리별 추이">
-          <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={chartData} margin={{ top: 4, right: 16, bottom: 4, left: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis dataKey="date" tick={axisStyle} axisLine={false} tickLine={false} />
-              <YAxis
-                tick={axisStyle}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v) => `${v}만`}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend
-                wrapperStyle={{ fontSize: 12 }}
-                iconType="circle"
-                iconSize={8}
-              />
-              {Object.entries(CATEGORY_COLORS).map(([key, color]) => (
-                <Line
-                  key={key}
-                  type="monotone"
-                  dataKey={key}
-                  stroke={color}
-                  strokeWidth={1.5}
-                  dot={{ r: 2.5, fill: color }}
-                  activeDot={{ r: 4 }}
-                />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        </SectionCard>
-      )}
+      <div>
+        <h2 className="mb-3 text-sm font-semibold text-slate-700">카테고리별 추이</h2>
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          {CATEGORY_CHARTS.map(({ key, label, color }) => {
+            const amountKey = `${key}Amount`;
+            const weightKey = `${key}Weight`;
+            return (
+              <SectionCard key={key} title={`${label} 추이`}>
+                <ResponsiveContainer width="100%" height={240}>
+                  <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 4, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="date" tick={axisStyle} axisLine={false} tickLine={false} />
+                    <YAxis
+                      yAxisId="amount"
+                      width={52}
+                      tick={axisStyle}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) => `${Number(v).toLocaleString('ko-KR')}만`}
+                    />
+                    <YAxis
+                      yAxisId="weight"
+                      orientation="right"
+                      width={36}
+                      tick={axisStyle}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) => `${v}%`}
+                      domain={[0, 'auto']}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" iconSize={8} />
+                    <Line
+                      yAxisId="amount"
+                      type="monotone"
+                      dataKey={amountKey}
+                      name="금액"
+                      stroke={color}
+                      strokeWidth={2}
+                      dot={{ r: 2.5, fill: color }}
+                      activeDot={{ r: 4 }}
+                    />
+                    <Line
+                      yAxisId="weight"
+                      type="monotone"
+                      dataKey={weightKey}
+                      name="비중"
+                      stroke="#475569"
+                      strokeWidth={1.5}
+                      strokeDasharray="4 3"
+                      dot={{ r: 2, fill: '#475569' }}
+                      activeDot={{ r: 4 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </SectionCard>
+            );
+          })}
+        </div>
+      </div>
 
       {/* 스냅샷 목록 */}
       <SectionCard title={`저장된 스냅샷 (${snapshots.length}개)`} noPadding>

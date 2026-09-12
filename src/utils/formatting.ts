@@ -6,9 +6,16 @@ export function formatKrw(won: number): string {
     return `${(won / 1_0000_0000).toFixed(2)}억원`;
   }
   if (Math.abs(won) >= 10000) {
-    return `${(won / 10000).toFixed(0)}만원`;
+    return `${Math.round(won / 10000).toLocaleString('ko-KR')}만원`;
   }
   return `${won.toLocaleString('ko-KR')}원`;
+}
+
+export function formatManWon(value: number, decimals = 1): string {
+  return value.toLocaleString('ko-KR', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
 }
 
 export function formatKrwDetail(won: number): string {
@@ -67,13 +74,13 @@ export function formatStockPrice(
   if (market === 'us' && priceUsd !== undefined) {
     const krwStr =
       priceKrw >= 10_000
-        ? `${(priceKrw / 10_000).toFixed(1)}만원`
+        ? `${formatManWon(priceKrw / 10_000)}만원`
         : `${Math.round(priceKrw).toLocaleString('ko-KR')}원`;
     return `$${priceUsd.toFixed(2)} / ${krwStr}`;
   }
   // 국내주식
   if (priceKrw >= 1_0000_0000) return `${(priceKrw / 1_0000_0000).toFixed(2)}억원`;
-  if (priceKrw >= 10_000) return `${(priceKrw / 10_000).toFixed(1)}만원`;
+  if (priceKrw >= 10_000) return `${formatManWon(priceKrw / 10_000)}만원`;
   return `${Math.round(priceKrw).toLocaleString('ko-KR')}원`;
 }
 
@@ -83,7 +90,7 @@ export function formatStockPrice(
  */
 export function formatCryptoPrice(priceKrw: number): string {
   if (priceKrw >= 1_0000_0000) return `${(priceKrw / 1_0000_0000).toFixed(2)}억원`;
-  if (priceKrw >= 10_000) return `${(priceKrw / 10_000).toFixed(1)}만원`;
+  if (priceKrw >= 10_000) return `${formatManWon(priceKrw / 10_000)}만원`;
   if (priceKrw >= 1_000) return `${(priceKrw / 1_000).toFixed(1)}천원`;
   return `${Math.round(priceKrw).toLocaleString('ko-KR')}원`;
 }

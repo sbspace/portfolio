@@ -8,7 +8,7 @@ import type {
   StockMarket,
   PriceData,
 } from '@/types';
-import { formatDate, formatKrw } from '@/utils/formatting';
+import { formatDate, formatKrw, formatManWon } from '@/utils/formatting';
 import type { HistoryFolder } from '@/hooks/useHistoryFolder';
 import { Button } from '@/components/ui/Button';
 import { SectionCard } from '@/components/ui/SectionCard';
@@ -250,7 +250,7 @@ export function SettingsPage({
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                 {[
                   { label: 'USD/KRW',    value: `${prices.usdKrw.toLocaleString('ko-KR')}원` },
-                  { label: '금 현물',    value: `${(prices.goldPerGram / 10000).toFixed(1)}만원/g` },
+                  { label: '금 현물',    value: `${formatManWon(prices.goldPerGram / 10000)}만원/g` },
                   { label: '데이터 출처', value: prices.source === 'realtime' ? '실시간' : prices.source === 'cached' ? '캐시' : prices.source === 'fallback' ? '부분실패' : 'Mock' },
                   { label: '마지막 조회', value: formatDate(prices.fetchedAt) },
                 ].map(({ label, value }) => (
