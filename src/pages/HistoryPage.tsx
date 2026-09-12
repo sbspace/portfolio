@@ -21,11 +21,36 @@ interface Props {
 }
 
 const CATEGORY_CHARTS = [
-  { key: 'cash', label: '현금', color: '#818cf8' },
-  { key: 'stock', label: '주식', color: '#34d399' },
-  { key: 'gold', label: '금', color: '#fbbf24' },
-  { key: 'crypto', label: '가상화폐', color: '#a78bfa' },
+  { key: 'cash', label: '현금', color: '#818cf8', amountKey: 'cashAmount', weightKey: 'cashWeight' },
+  { key: 'stock', label: '주식', color: '#34d399', amountKey: 'stockAmount', weightKey: 'stockWeight' },
+  { key: 'gold', label: '금', color: '#fbbf24', amountKey: 'goldAmount', weightKey: 'goldWeight' },
+  { key: 'crypto', label: '가상화폐', color: '#a78bfa', amountKey: 'cryptoAmount', weightKey: 'cryptoWeight' },
 ] as const;
+
+const TOTAL_CHARTS = [
+  { key: 'portfolioTotal', title: '포트폴리오 금액 추이', name: '포트폴리오 금액', color: '#6366f1' },
+  { key: 'totalWithFixed', title: '고정자산 전체 포함 총자산 추이', name: '고정자산 전체 포함 총자산', color: '#0f172a' },
+] as const;
+
+function paddedDomain(
+  values: number[],
+  options: { min: number; max?: number; minPadding: number }
+): [number, number] {
+  const valueMin = Math.min(...values);
+  const valueMax = Math.max(...values);
+  const padding = Math.max(
+    (valueMax - valueMin) * 0.12,
+    Math.abs(valueMax) * 0.01,
+    options.minPadding
+  );
+  return [
+    Math.max(options.min, Math.floor((valueMin - padding) * 10) / 10),
+    Math.min(options.max ?? Infinity, Math.ceil((valueMax + padding) * 10) / 10),
+  ];
+}
+
+const formatAxisDate = (timestamp: number) =>
+  new Date(timestamp).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
 
 type TooltipPayload = {
   color?: string;
@@ -41,12 +66,14 @@ const CustomTooltip = ({
 }: {
   active?: boolean;
   payload?: TooltipPayload[];
-  label?: string;
+  label?: string | number;
 }) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-lg p-3 text-xs min-w-[140px]">
-      <p className="font-semibold text-slate-700 mb-2">{label}</p>
+      <p className="font-semibold text-slate-700 mb-2">
+        {typeof label === 'number' ? formatAxisDate(label) : label}
+      </p>
       {payload.map((entry, i) => (
         <div key={i} className="flex items-center gap-2 mb-0.5">
           <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
@@ -68,7 +95,7 @@ export function HistoryPage({ snapshots, onDelete }: Props) {
   );
 
   const chartData = sorted.map((snap) => ({
-    date:   new Date(snap.createdAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+    timestamp: new Date(snap.createdAt).getTime(),
     portfolioTotal: Math.round(snap.portfolio.totalKrw / 10000),
     totalWithFixed: Math.round((snap.portfolio.totalKrwWithFixed ?? snap.portfolio.totalKrw) / 10000),
     cashAmount: Math.round(snap.portfolio.categoryValues.cash / 10000),
@@ -82,15 +109,6 @@ export function HistoryPage({ snapshots, onDelete }: Props) {
   }));
 
   const axisStyle = { fontSize: 11, fill: '#94a3b8' };
-
-  const totalValues = chartData.flatMap((d) => [d.portfolioTotal, d.totalWithFixed]);
-  const totalMin = Math.min(...totalValues);
-  const totalMax = Math.max(...totalValues);
-  const totalPadding = Math.max((totalMax - totalMin) * 0.15, totalMax * 0.02, 1);
-  const totalDomain: [number, number] = [
-    Math.max(0, Math.floor(totalMin - totalPadding)),
-    Math.ceil(totalMax + totalPadding),
-  ];
 
   if (snapshots.length === 0) {
     return (
@@ -112,77 +130,103 @@ export function HistoryPage({ snapshots, onDelete }: Props) {
       <PageHeader title="자산 이력" description={`총 ${snapshots.length}개 스냅샷`} />
 
       {/* 총자산 추이 */}
-      <SectionCard title="총자산 추이">
-        <ResponsiveContainer width="100%" height={240}>
-          <LineChart data={chartData} margin={{ top: 4, right: 16, bottom: 4, left: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-            <XAxis dataKey="date" tick={axisStyle} axisLine={false} tickLine={false} />
-            <YAxis
-              tick={axisStyle}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={(v) => `${Number(v).toLocaleString('ko-KR')}만`}
-              domain={totalDomain}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend
-              wrapperStyle={{ fontSize: 12 }}
-              iconType="circle"
-              iconSize={8}
-            />
-            <Line
-              type="monotone"
-              dataKey="portfolioTotal"
-              name="포트폴리오 금액"
-              stroke="#6366f1"
-              strokeWidth={2.5}
-              dot={{ r: 3, fill: '#6366f1' }}
-              activeDot={{ r: 5 }}
-            />
-            <Line
-              type="monotone"
-              dataKey="totalWithFixed"
-              name="고정자산 전체 포함 총자산"
-              stroke="#0f172a"
-              strokeWidth={2}
-              strokeDasharray="5 4"
-              dot={{ r: 3, fill: '#0f172a' }}
-              activeDot={{ r: 5 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </SectionCard>
+      <div>
+        <h2 className="mb-3 text-sm font-semibold text-slate-700">총자산 추이</h2>
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          {TOTAL_CHARTS.map(({ key, title, name, color }) => {
+            const domain = paddedDomain(chartData.map((item) => item[key]), {
+              min: 0,
+              minPadding: 1,
+            });
+            return (
+              <SectionCard key={key} title={title} className="min-w-0">
+                <ResponsiveContainer width="100%" height={240}>
+                  <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis
+                      dataKey="timestamp"
+                      type="number"
+                      scale="time"
+                      domain={['dataMin', 'dataMax']}
+                      tickFormatter={formatAxisDate}
+                      tick={axisStyle}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      width={58}
+                      tick={axisStyle}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) => `${Number(v).toLocaleString('ko-KR')}만`}
+                      domain={domain}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" iconSize={8} />
+                    <Line
+                      type="monotone"
+                      dataKey={key}
+                      name={name}
+                      stroke={color}
+                      strokeWidth={2.5}
+                      dot={{ r: 3, fill: color }}
+                      activeDot={{ r: 5 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </SectionCard>
+            );
+          })}
+        </div>
+      </div>
 
       {/* 카테고리별 추이 */}
       <div>
         <h2 className="mb-3 text-sm font-semibold text-slate-700">카테고리별 추이</h2>
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-          {CATEGORY_CHARTS.map(({ key, label, color }) => {
-            const amountKey = `${key}Amount`;
-            const weightKey = `${key}Weight`;
+          {CATEGORY_CHARTS.map(({ key, label, color, amountKey, weightKey }) => {
+            const amountDomain = paddedDomain(chartData.map((item) => item[amountKey]), {
+              min: 0,
+              minPadding: 1,
+            });
+            const weightDomain = paddedDomain(chartData.map((item) => item[weightKey]), {
+              min: 0,
+              max: 100,
+              minPadding: 0.5,
+            });
             return (
-              <SectionCard key={key} title={`${label} 추이`}>
+              <SectionCard key={key} title={`${label} 추이`} className="min-w-0">
                 <ResponsiveContainer width="100%" height={240}>
                   <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 4, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis dataKey="date" tick={axisStyle} axisLine={false} tickLine={false} />
-                    <YAxis
-                      yAxisId="amount"
-                      width={52}
+                    <XAxis
+                      dataKey="timestamp"
+                      type="number"
+                      scale="time"
+                      domain={['dataMin', 'dataMax']}
+                      tickFormatter={formatAxisDate}
                       tick={axisStyle}
                       axisLine={false}
                       tickLine={false}
-                      tickFormatter={(v) => `${Number(v).toLocaleString('ko-KR')}만`}
                     />
                     <YAxis
                       yAxisId="weight"
-                      orientation="right"
-                      width={36}
+                      width={38}
                       tick={axisStyle}
                       axisLine={false}
                       tickLine={false}
                       tickFormatter={(v) => `${v}%`}
-                      domain={[0, 'auto']}
+                      domain={weightDomain}
+                    />
+                    <YAxis
+                      yAxisId="amount"
+                      orientation="right"
+                      width={58}
+                      tick={axisStyle}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) => `${Number(v).toLocaleString('ko-KR')}만`}
+                      domain={amountDomain}
                     />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" iconSize={8} />
