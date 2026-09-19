@@ -12,6 +12,7 @@ import {
   Strikethrough,
   Underline,
   Undo2,
+  Trash2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -25,6 +26,7 @@ interface Props {
   onUpdateDatedMemo: (date: string, memo: string) => void;
   memoTitles: Record<string, string>;
   onUpdateTitle: (key: string, title: string) => void;
+  onDelete: (key: string) => void;
 }
 
 function todayDate(): string {
@@ -37,9 +39,10 @@ function dateLabel(date: string): string {
   return `${year}년 ${Number(month)}/${Number(day)} 메모`;
 }
 
-export function MemoPage({ memo, onUpdate, datedMemos, onUpdateDatedMemo, memoTitles, onUpdateTitle }: Props) {
+export function MemoPage({ memo, onUpdate, datedMemos, onUpdateDatedMemo, memoTitles, onUpdateTitle, onDelete }: Props) {
   const [selectedDate, setSelectedDate] = useState(todayDate);
   const [showLegacy, setShowLegacy] = useState(false);
+  const [editorVersion, setEditorVersion] = useState(0);
   const memoKey = showLegacy ? 'legacy' : selectedDate;
   const title = memoTitles[memoKey] ?? '';
   const memoLabel = (key: string) => {
@@ -47,6 +50,18 @@ export function MemoPage({ memo, onUpdate, datedMemos, onUpdateDatedMemo, memoTi
     return memoTitles[key]?.trim() ? `${label} · ${memoTitles[key].trim()}` : label;
   };
   const content = showLegacy ? memo : datedMemos[selectedDate] ?? '';
+  const hasSavedMemo = showLegacy
+    ? Boolean(memo || memoTitles.legacy)
+    : Object.prototype.hasOwnProperty.call(datedMemos, selectedDate);
+  const handleDelete = () => {
+    if (!hasSavedMemo || !window.confirm(`“${memoLabel(memoKey)}”를 삭제할까요? 제목과 내용이 삭제되며 되돌릴 수 없습니다.`)) return;
+    onDelete(memoKey);
+    setEditorVersion((value) => value + 1);
+    if (showLegacy) {
+      setShowLegacy(false);
+      setSelectedDate(todayDate());
+    }
+  };
   const updateContent = useCallback((value: string) => {
     if (showLegacy) onUpdate(value);
     else onUpdateDatedMemo(selectedDate, value);
@@ -69,6 +84,10 @@ export function MemoPage({ memo, onUpdate, datedMemos, onUpdateDatedMemo, memoTi
           </label>
           <Button variant="secondary" onClick={() => { setSelectedDate(todayDate()); setShowLegacy(false); }}>오늘 메모</Button>
           <Button onClick={() => updateContent(content)}>메모 저장</Button>
+          <Button variant="danger" disabled={!hasSavedMemo} onClick={handleDelete}>
+            <Trash2 size={16} />
+            메모 삭제
+          </Button>
         </div>
         <label className="mt-3 block text-sm text-slate-600">
           메모 제목
@@ -92,7 +111,7 @@ export function MemoPage({ memo, onUpdate, datedMemos, onUpdateDatedMemo, memoTi
         </div>
       </SectionCard>
       <h2 className="mb-3 break-all text-sm font-semibold text-slate-700">{memoLabel(memoKey)}</h2>
-      <MemoEditor key={showLegacy ? 'legacy' : selectedDate} memo={content} onUpdate={updateContent} />
+      <MemoEditor key={`${memoKey}-${editorVersion}`} memo={content} onUpdate={updateContent} />
     </div>
   );
 }

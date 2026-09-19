@@ -25,6 +25,7 @@ export default function App() {
     updateMemo,
     updateDatedMemo,
     updateMemoTitle,
+    deleteMemo,
     saveSnapshot,
     deleteSnapshot,
     syncHoldingsToTickers,
@@ -110,6 +111,7 @@ export default function App() {
           onUpdateDatedMemo={updateDatedMemo}
           memoTitles={state.memoTitles}
           onUpdateTitle={updateMemoTitle}
+          onDelete={deleteMemo}
         />
       )}
 

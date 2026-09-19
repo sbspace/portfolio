@@ -89,6 +89,16 @@ export function usePortfolio() {
     setState((s) => ({ ...s, datedMemos: { ...s.datedMemos, [date]: memo } }));
   }, []);
 
+  const deleteMemo = useCallback((key: string) => {
+    setState((s) => {
+      const datedMemos = { ...s.datedMemos };
+      const memoTitles = { ...s.memoTitles };
+      delete datedMemos[key];
+      delete memoTitles[key];
+      return { ...s, datedMemos, memoTitles, memo: key === 'legacy' ? '' : s.memo };
+    });
+  }, []);
+
   const updateMemoTitle = useCallback((key: string, title: string) => {
     setState((s) => ({
       ...s,
@@ -176,6 +186,7 @@ export function usePortfolio() {
     updateMemo,
     updateDatedMemo,
     updateMemoTitle,
+    deleteMemo,
     saveSnapshot,
     deleteSnapshot,
     syncHoldingsToTickers,
