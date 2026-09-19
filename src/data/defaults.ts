@@ -88,6 +88,7 @@ export function makeDefaultAppState(): AppState {
     targetWeights: DEFAULT_TARGET_WEIGHTS,
     snapshots: [],
     memo: '',
+    memos: [],
     datedMemos: {},
     memoTitles: {},
     settings: DEFAULT_SETTINGS,

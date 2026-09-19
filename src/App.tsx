@@ -23,8 +23,7 @@ export default function App() {
     updateTargetWeights,
     updateSettings,
     updateMemo,
-    updateDatedMemo,
-    updateMemoTitle,
+    addMemo,
     deleteMemo,
     saveSnapshot,
     deleteSnapshot,
@@ -105,12 +104,9 @@ export default function App() {
 
       {currentPage === 'memo' && (
         <MemoPage
-          memo={state.memo}
+          memos={state.memos}
           onUpdate={updateMemo}
-          datedMemos={state.datedMemos}
-          onUpdateDatedMemo={updateDatedMemo}
-          memoTitles={state.memoTitles}
-          onUpdateTitle={updateMemoTitle}
+          onAdd={addMemo}
           onDelete={deleteMemo}
         />
       )}

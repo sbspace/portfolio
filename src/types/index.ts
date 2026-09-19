@@ -156,12 +156,21 @@ export interface Snapshot {
 // App-level state
 // ============================================================
 
+export interface MemoEntry {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
 export interface AppState {
   beomseokAssets: PersonAssets;
   seyeonAssets: PersonAssets;
   targetWeights: TargetWeights;
   snapshots: Snapshot[];
   memo: string;
+  memos: MemoEntry[];
   datedMemos: Record<string, string>;
   memoTitles: Record<string, string>; // 날짜 키 또는 날짜 없는 기존 메모의 legacy 키
   settings: AppSettings;

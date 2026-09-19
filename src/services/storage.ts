@@ -1,5 +1,6 @@
 import type { AppState, AppSettings, StockTickerConfig, PersonAssets, FixedAsset } from '@/types';
 import { makeDefaultAppState, DEFAULT_SETTINGS } from '@/data/defaults';
+import { migrateMemos } from '@/utils/memos';
 
 const STORAGE_KEY = 'portfolio_app_v1';
 const STATE_API_URL = '/api/state';
@@ -62,6 +63,7 @@ export function normalizeState(raw: Partial<AppState>): AppState {
     targetWeights: raw.targetWeights ?? defaults.targetWeights,
     snapshots: raw.snapshots ?? [],
     memo: typeof raw.memo === 'string' ? raw.memo : defaults.memo,
+    memos: migrateMemos(raw),
     memoTitles: raw.memoTitles && typeof raw.memoTitles === 'object' && !Array.isArray(raw.memoTitles)
       ? Object.fromEntries(Object.entries(raw.memoTitles).filter(([key, title]) =>
           (key === 'legacy' || /^\d{4}-\d{2}-\d{2}$/.test(key)) && typeof title === 'string'))

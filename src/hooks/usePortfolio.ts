@@ -81,33 +81,28 @@ export function usePortfolio() {
     setState((s) => ({ ...s, settings }));
   }, []);
 
-  const updateMemo = useCallback((memo: string) => {
-    setState((s) => ({ ...s, memo }));
-  }, []);
-
-  const updateDatedMemo = useCallback((date: string, memo: string) => {
-    setState((s) => ({ ...s, datedMemos: { ...s.datedMemos, [date]: memo } }));
-  }, []);
-
-  const deleteMemo = useCallback((key: string) => {
-    setState((s) => {
-      const datedMemos = { ...s.datedMemos };
-      const memoTitles = { ...s.memoTitles };
-      delete datedMemos[key];
-      delete memoTitles[key];
-      return { ...s, datedMemos, memoTitles, memo: key === 'legacy' ? '' : s.memo };
-    });
-  }, []);
-
-  const updateMemoTitle = useCallback((key: string, title: string) => {
+  const addMemo = useCallback(() => {
+    const id = uuidv4();
+    const now = new Date().toISOString();
     setState((s) => ({
       ...s,
-      memoTitles: { ...s.memoTitles, [key]: title },
-      datedMemos: key === 'legacy' ? s.datedMemos : {
-        ...s.datedMemos,
-        [key]: s.datedMemos[key] ?? '',
-      },
+      memos: [{ id, title: '', content: '', createdAt: now, updatedAt: now }, ...s.memos],
     }));
+    return id;
+  }, []);
+
+  const updateMemo = useCallback((id: string, patch: { title?: string; content?: string }) => {
+    const now = new Date().toISOString();
+    setState((s) => ({ ...s, memos: s.memos.map((memo) => {
+      if (memo.id !== id ||
+          ((patch.title === undefined || patch.title === memo.title) &&
+           (patch.content === undefined || patch.content === memo.content))) return memo;
+      return { ...memo, ...patch, updatedAt: now };
+    }) }));
+  }, []);
+
+  const deleteMemo = useCallback((id: string) => {
+    setState((s) => ({ ...s, memos: s.memos.filter((memo) => memo.id !== id) }));
   }, []);
 
   const saveSnapshot = useCallback(
@@ -184,8 +179,7 @@ export function usePortfolio() {
     updateTargetWeights,
     updateSettings,
     updateMemo,
-    updateDatedMemo,
-    updateMemoTitle,
+    addMemo,
     deleteMemo,
     saveSnapshot,
     deleteSnapshot,
