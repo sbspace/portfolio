@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlignCenter,
   AlignLeft,
@@ -16,10 +16,85 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SectionCard } from '@/components/ui/SectionCard';
+import { Button } from '@/components/ui/Button';
 
 interface Props {
   memo: string;
   onUpdate: (memo: string) => void;
+  datedMemos: Record<string, string>;
+  onUpdateDatedMemo: (date: string, memo: string) => void;
+  memoTitles: Record<string, string>;
+  onUpdateTitle: (key: string, title: string) => void;
+}
+
+function todayDate(): string {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+}
+
+function dateLabel(date: string): string {
+  const [year, month, day] = date.split('-');
+  return `${year}년 ${Number(month)}/${Number(day)} 메모`;
+}
+
+export function MemoPage({ memo, onUpdate, datedMemos, onUpdateDatedMemo, memoTitles, onUpdateTitle }: Props) {
+  const [selectedDate, setSelectedDate] = useState(todayDate);
+  const [showLegacy, setShowLegacy] = useState(false);
+  const memoKey = showLegacy ? 'legacy' : selectedDate;
+  const title = memoTitles[memoKey] ?? '';
+  const memoLabel = (key: string) => {
+    const label = key === 'legacy' ? '기존 메모 (날짜 없음)' : dateLabel(key);
+    return memoTitles[key]?.trim() ? `${label} · ${memoTitles[key].trim()}` : label;
+  };
+  const content = showLegacy ? memo : datedMemos[selectedDate] ?? '';
+  const updateContent = useCallback((value: string) => {
+    if (showLegacy) onUpdate(value);
+    else onUpdateDatedMemo(selectedDate, value);
+  }, [showLegacy, selectedDate, onUpdate, onUpdateDatedMemo]);
+
+  return (
+    <div>
+      <PageHeader title="메모" description="날짜별로 메모를 작성하세요. 제목, 내용과 서식은 자동으로 저장됩니다." />
+      <SectionCard className="mb-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            메모 날짜
+            <input type="date" aria-label="메모 날짜" value={selectedDate}
+              onChange={(event) => {
+                if (!event.target.value) return;
+                setSelectedDate(event.target.value);
+                setShowLegacy(false);
+              }}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400" />
+          </label>
+          <Button variant="secondary" onClick={() => { setSelectedDate(todayDate()); setShowLegacy(false); }}>오늘 메모</Button>
+          <Button onClick={() => updateContent(content)}>메모 저장</Button>
+        </div>
+        <label className="mt-3 block text-sm text-slate-600">
+          메모 제목
+          <input
+            type="text"
+            aria-label="메모 제목"
+            value={title}
+            placeholder="예: 부동산 계획"
+            onChange={(event) => onUpdateTitle(memoKey, event.target.value)}
+            className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
+          />
+        </label>
+        <div className="mt-3 flex flex-wrap gap-2" aria-label="저장된 메모">
+          {Object.keys(datedMemos).sort().reverse().map((date) => (
+            <Button key={date} size="sm" variant={!showLegacy && date === selectedDate ? 'primary' : 'secondary'}
+              onClick={() => { setSelectedDate(date); setShowLegacy(false); }}>
+              <span className="break-all text-left">{memoLabel(date)}</span>
+            </Button>
+          ))}
+          {(memo || memoTitles.legacy) && <Button size="sm" variant={showLegacy ? 'primary' : 'secondary'} onClick={() => setShowLegacy(true)}><span className="break-all text-left">{memoLabel('legacy')}</span></Button>}
+        </div>
+      </SectionCard>
+      <h2 className="mb-3 break-all text-sm font-semibold text-slate-700">{memoLabel(memoKey)}</h2>
+      <MemoEditor key={showLegacy ? 'legacy' : selectedDate} memo={content} onUpdate={updateContent} />
+    </div>
+  );
 }
 
 const RICH_TEXT_PREFIX = '<!-- portfolio-rich-text -->';
@@ -80,7 +155,7 @@ const TOOLBAR_BUTTONS: { command: string; label: string; Icon: LucideIcon }[] = 
   { command: 'justifyRight', label: '오른쪽 정렬', Icon: AlignRight },
 ];
 
-export function MemoPage({ memo, onUpdate }: Props) {
+function MemoEditor({ memo, onUpdate }: Pick<Props, 'memo' | 'onUpdate'>) {
   const editorRef = useRef<HTMLDivElement>(null);
   const selectionRef = useRef<Range | null>(null);
 
@@ -143,11 +218,6 @@ export function MemoPage({ memo, onUpdate }: Props) {
 
   return (
     <div>
-      <PageHeader
-        title="메모"
-        description="자유롭게 작성하고 필요한 부분을 선택해 서식을 적용하세요. 내용은 자동으로 저장됩니다."
-      />
-
       <SectionCard noPadding>
         <div className="flex flex-wrap items-center gap-1 border-b border-slate-100 bg-slate-50/70 p-2.5">
           <select

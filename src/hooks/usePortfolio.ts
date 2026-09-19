@@ -85,6 +85,21 @@ export function usePortfolio() {
     setState((s) => ({ ...s, memo }));
   }, []);
 
+  const updateDatedMemo = useCallback((date: string, memo: string) => {
+    setState((s) => ({ ...s, datedMemos: { ...s.datedMemos, [date]: memo } }));
+  }, []);
+
+  const updateMemoTitle = useCallback((key: string, title: string) => {
+    setState((s) => ({
+      ...s,
+      memoTitles: { ...s.memoTitles, [key]: title },
+      datedMemos: key === 'legacy' ? s.datedMemos : {
+        ...s.datedMemos,
+        [key]: s.datedMemos[key] ?? '',
+      },
+    }));
+  }, []);
+
   const saveSnapshot = useCallback(
     (prices: PriceData, label?: string) => {
       setState((s) => {
@@ -159,6 +174,8 @@ export function usePortfolio() {
     updateTargetWeights,
     updateSettings,
     updateMemo,
+    updateDatedMemo,
+    updateMemoTitle,
     saveSnapshot,
     deleteSnapshot,
     syncHoldingsToTickers,

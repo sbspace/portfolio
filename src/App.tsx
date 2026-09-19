@@ -23,6 +23,8 @@ export default function App() {
     updateTargetWeights,
     updateSettings,
     updateMemo,
+    updateDatedMemo,
+    updateMemoTitle,
     saveSnapshot,
     deleteSnapshot,
     syncHoldingsToTickers,
@@ -101,7 +103,14 @@ export default function App() {
       )}
 
       {currentPage === 'memo' && (
-        <MemoPage memo={state.memo} onUpdate={updateMemo} />
+        <MemoPage
+          memo={state.memo}
+          onUpdate={updateMemo}
+          datedMemos={state.datedMemos}
+          onUpdateDatedMemo={updateDatedMemo}
+          memoTitles={state.memoTitles}
+          onUpdateTitle={updateMemoTitle}
+        />
       )}
 
       {currentPage === 'settings' && (

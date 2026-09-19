@@ -62,6 +62,14 @@ export function normalizeState(raw: Partial<AppState>): AppState {
     targetWeights: raw.targetWeights ?? defaults.targetWeights,
     snapshots: raw.snapshots ?? [],
     memo: typeof raw.memo === 'string' ? raw.memo : defaults.memo,
+    memoTitles: raw.memoTitles && typeof raw.memoTitles === 'object' && !Array.isArray(raw.memoTitles)
+      ? Object.fromEntries(Object.entries(raw.memoTitles).filter(([key, title]) =>
+          (key === 'legacy' || /^\d{4}-\d{2}-\d{2}$/.test(key)) && typeof title === 'string'))
+      : {},
+    datedMemos: raw.datedMemos && typeof raw.datedMemos === 'object' && !Array.isArray(raw.datedMemos)
+      ? Object.fromEntries(Object.entries(raw.datedMemos).filter(([date, content]) =>
+          /^\d{4}-\d{2}-\d{2}$/.test(date) && typeof content === 'string'))
+      : {},
     settings: migrateSettings((raw.settings ?? {}) as Partial<AppSettings>),
   };
 }

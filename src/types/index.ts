@@ -162,6 +162,8 @@ export interface AppState {
   targetWeights: TargetWeights;
   snapshots: Snapshot[];
   memo: string;
+  datedMemos: Record<string, string>;
+  memoTitles: Record<string, string>; // 날짜 키 또는 날짜 없는 기존 메모의 legacy 키
   settings: AppSettings;
 }
 
