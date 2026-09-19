@@ -6,6 +6,7 @@ import {
   Target,
   Scale,
   TrendingUp,
+  NotebookPen,
   Settings,
   Menu,
   X,
@@ -24,6 +25,7 @@ const NAV_ITEMS: { page: Page; label: string; Icon: LucideIcon }[] = [
   { page: 'target',      label: '목표 비중', Icon: Target },
   { page: 'rebalancing', label: '리밸런싱',  Icon: Scale },
   { page: 'history',     label: '이력',      Icon: TrendingUp },
+  { page: 'memo',        label: '메모',      Icon: NotebookPen },
   { page: 'settings',    label: '설정',      Icon: Settings },
 ];
 

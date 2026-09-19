@@ -6,7 +6,7 @@ export type Owner = 'beomseok' | 'seyeon';
 export type ViewFilter = Owner | 'combined';
 export type AssetCategory = 'cash' | 'stock' | 'gold' | 'crypto' | 'fixedAsset';
 export type StockMarket = 'domestic' | 'us';
-export type Page = 'dashboard' | 'input' | 'target' | 'rebalancing' | 'history' | 'settings';
+export type Page = 'dashboard' | 'input' | 'target' | 'rebalancing' | 'history' | 'memo' | 'settings';
 export type PriceProviderType = 'mock' | 'real';
 export type PriceSource = 'mock' | 'realtime' | 'cached' | 'fallback';
 
@@ -161,6 +161,7 @@ export interface AppState {
   seyeonAssets: PersonAssets;
   targetWeights: TargetWeights;
   snapshots: Snapshot[];
+  memo: string;
   settings: AppSettings;
 }
 

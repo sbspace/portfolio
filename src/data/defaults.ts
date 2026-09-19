@@ -87,6 +87,7 @@ export function makeDefaultAppState(): AppState {
     seyeonAssets: makeEmptyPersonAssets('seyeon', stockTickers, cryptoTickers),
     targetWeights: DEFAULT_TARGET_WEIGHTS,
     snapshots: [],
+    memo: '',
     settings: DEFAULT_SETTINGS,
   };
 }

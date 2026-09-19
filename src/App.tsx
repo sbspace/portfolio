@@ -6,6 +6,7 @@ import { AssetInputPage } from '@/pages/AssetInputPage';
 import { TargetWeightPage } from '@/pages/TargetWeightPage';
 import { RebalancingPage } from '@/pages/RebalancingPage';
 import { HistoryPage } from '@/pages/HistoryPage';
+import { MemoPage } from '@/pages/MemoPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import { usePrices } from '@/hooks/usePrices';
@@ -21,6 +22,7 @@ export default function App() {
     updateSeyeonAssets,
     updateTargetWeights,
     updateSettings,
+    updateMemo,
     saveSnapshot,
     deleteSnapshot,
     syncHoldingsToTickers,
@@ -96,6 +98,10 @@ export default function App() {
 
       {currentPage === 'history' && (
         <HistoryPage snapshots={state.snapshots} onDelete={deleteSnapshot} />
+      )}
+
+      {currentPage === 'memo' && (
+        <MemoPage memo={state.memo} onUpdate={updateMemo} />
       )}
 
       {currentPage === 'settings' && (

@@ -81,6 +81,10 @@ export function usePortfolio() {
     setState((s) => ({ ...s, settings }));
   }, []);
 
+  const updateMemo = useCallback((memo: string) => {
+    setState((s) => ({ ...s, memo }));
+  }, []);
+
   const saveSnapshot = useCallback(
     (prices: PriceData, label?: string) => {
       setState((s) => {
@@ -154,6 +158,7 @@ export function usePortfolio() {
     updateSeyeonAssets,
     updateTargetWeights,
     updateSettings,
+    updateMemo,
     saveSnapshot,
     deleteSnapshot,
     syncHoldingsToTickers,

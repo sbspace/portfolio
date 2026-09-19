@@ -61,6 +61,7 @@ export function normalizeState(raw: Partial<AppState>): AppState {
     seyeonAssets: migratePersonAssets(raw.seyeonAssets, defaults.seyeonAssets),
     targetWeights: raw.targetWeights ?? defaults.targetWeights,
     snapshots: raw.snapshots ?? [],
+    memo: typeof raw.memo === 'string' ? raw.memo : defaults.memo,
     settings: migrateSettings((raw.settings ?? {}) as Partial<AppSettings>),
   };
 }
