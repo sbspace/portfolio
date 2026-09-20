@@ -19,6 +19,8 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import type { MemoEntry } from '@/types';
 import { formatMemoDate } from '@/utils/memos';
+import { isMemoImageSource, prepareMemoImage } from '@/utils/memoImages';
+import { checkMemoImageCapacity } from '@/services/storage';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SectionCard } from '@/components/ui/SectionCard';
 import { Button } from '@/components/ui/Button';
@@ -121,6 +123,7 @@ export function MemoPage({ memos, onAdd, onUpdate, onDelete }: Props) {
 const RICH_TEXT_PREFIX = '<!-- portfolio-rich-text -->';
 const ALLOWED_TAGS = new Set([
   'B', 'BR', 'DIV', 'EM', 'FONT', 'I', 'LI', 'OL', 'P', 'S', 'SPAN', 'STRIKE', 'STRONG', 'U', 'UL',
+  'IMG',
 ]);
 
 function escapePlainText(value: string): string {
@@ -133,6 +136,10 @@ function sanitizeMemoHtml(value: string): string {
   const parsed = new DOMParser().parseFromString(value, 'text/html');
 
   parsed.body.querySelectorAll('*').forEach((element) => {
+    if (element.tagName === 'IMG' && !isMemoImageSource(element.getAttribute('src') ?? '')) {
+      element.remove();
+      return;
+    }
     if (!ALLOWED_TAGS.has(element.tagName)) {
       element.replaceWith(...Array.from(element.childNodes));
       return;
@@ -142,13 +149,14 @@ function sanitizeMemoHtml(value: string): string {
       const name = attribute.name.toLowerCase();
       const attributeValue = attribute.value.trim();
       const validFontSize = element.tagName === 'FONT' && name === 'size' && /^[1-7]$/.test(attributeValue);
+      const validImageAttribute = element.tagName === 'IMG' && (name === 'src' || name === 'alt');
       const validFontColor = element.tagName === 'FONT' && name === 'color' && /^#[0-9a-f]{6}$/i.test(attributeValue);
       const validAlignment =
         (element.tagName === 'DIV' || element.tagName === 'P') &&
         name === 'style' &&
         /^text-align:\s*(left|center|right|justify);?$/i.test(attributeValue);
 
-      if (!validFontSize && !validFontColor && !validAlignment) {
+      if (!validFontSize && !validFontColor && !validAlignment && !validImageAttribute) {
         element.removeAttribute(attribute.name);
       }
     });
@@ -179,6 +187,9 @@ const TOOLBAR_BUTTONS: { command: string; label: string; Icon: LucideIcon }[] = 
 function MemoEditor({ memo, onUpdate }: { memo: string; onUpdate: (content: string) => void }) {
   const editorRef = useRef<HTMLDivElement>(null);
   const selectionRef = useRef<Range | null>(null);
+  const pastingRef = useRef(false);
+  const [pastingImage, setPastingImage] = useState(false);
+  const [pasteError, setPasteError] = useState('');
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -231,15 +242,62 @@ function MemoEditor({ memo, onUpdate }: { memo: string; onUpdate: (content: stri
     persistContent();
   };
 
-  const handlePaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+  const handlePaste = async (event: React.ClipboardEvent<HTMLDivElement>) => {
     event.preventDefault();
-    document.execCommand('insertText', false, event.clipboardData.getData('text/plain'));
-    persistContent();
+    if (pastingRef.current) return;
+    setPasteError('');
+    const files = Array.from(event.clipboardData.items)
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null);
+    if (!files.length) {
+      document.execCommand('insertText', false, event.clipboardData.getData('text/plain'));
+      persistContent();
+      return;
+    }
+    const editor = editorRef.current;
+    if (!editor) return;
+    const before = editor.innerHTML;
+    const selection = window.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+    pastingRef.current = true;
+    setPastingImage(true);
+    try {
+      if (files.length > 4) throw new Error('이미지는 한 번에 4장까지 붙여넣을 수 있습니다.');
+      const images: string[] = [];
+      for (const file of files) images.push(await prepareMemoImage(file));
+      // Do not insert into another memo or overwrite edits made while decoding.
+      if (editorRef.current !== editor || !editor.isConnected) return;
+      if (editor.innerHTML !== before) throw new Error('메모 내용이 변경되었습니다. 원하는 위치에 다시 붙여넣어 주세요.');
+      const html = images.map((src) => `<img src="${src}" alt="붙여넣은 이미지"><br>`).join('');
+      checkMemoImageCapacity(html);
+      editor.focus();
+      const target = window.getSelection();
+      const insertion = range && editor.contains(range.commonAncestorContainer) ? range : document.createRange();
+      if (insertion !== range) {
+        insertion.selectNodeContents(editor);
+        insertion.collapse(false);
+      }
+      target?.removeAllRanges();
+      target?.addRange(insertion);
+      if (!document.execCommand('insertHTML', false, html)) throw new Error('이미지를 붙여넣지 못했습니다. 다시 시도해 주세요.');
+      persistContent();
+    } catch (error) {
+      if (editorRef.current === editor && editor.isConnected) {
+        setPasteError(error instanceof Error ? error.message : '이미지를 읽지 못했습니다. 다시 캡처해 주세요.');
+      }
+    } finally {
+      pastingRef.current = false;
+      if (editorRef.current === editor && editor.isConnected) setPastingImage(false);
+    }
   };
 
   return (
     <div>
       <SectionCard noPadding>
+        <p className="px-4 pt-3 text-xs text-slate-400">캡처 이미지를 복사한 뒤 본문에서 Ctrl+V로 붙여넣을 수 있습니다.</p>
+        {pastingImage && <p role="status" className="px-4 pt-2 text-xs text-indigo-600">이미지 처리 중…</p>}
+        {pasteError && <p role="alert" className="px-4 pt-2 text-xs text-rose-600">{pasteError}</p>}
         <div className="flex flex-wrap items-center gap-1 border-b border-slate-100 bg-slate-50/70 p-2.5">
           <select
             aria-label="글자 크기"
@@ -330,7 +388,7 @@ function MemoEditor({ memo, onUpdate }: { memo: string; onUpdate: (content: stri
           data-placeholder="메모를 입력하세요..."
           onInput={persistContent}
           onPaste={handlePaste}
-          className="min-h-[60vh] w-full overflow-y-auto p-5 text-sm leading-7 text-slate-700 outline-none empty:before:pointer-events-none empty:before:text-slate-300 empty:before:content-[attr(data-placeholder)] focus:ring-2 focus:ring-inset focus:ring-indigo-500 [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6"
+          className="min-h-[60vh] w-full overflow-y-auto p-5 text-sm leading-7 text-slate-700 outline-none empty:before:pointer-events-none empty:before:text-slate-300 empty:before:content-[attr(data-placeholder)] focus:ring-2 focus:ring-inset focus:ring-indigo-500 [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6 [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-lg"
         />
       </SectionCard>
     </div>

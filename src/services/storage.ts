@@ -93,6 +93,14 @@ export function saveState(state: AppState): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+// Leave room for other portfolio data when embedding images in the shared state.
+export function checkMemoImageCapacity(imageHtml: string): void {
+  const current = localStorage.getItem(STORAGE_KEY) ?? '';
+  if (new Blob([current, imageHtml]).size > 1_000_000) {
+    throw new Error('이미지를 저장할 공간이 부족합니다. 불필요한 메모 이미지를 지운 후 다시 시도해 주세요.');
+  }
+}
+
 export function clearState(): void {
   localStorage.removeItem(STORAGE_KEY);
 }
