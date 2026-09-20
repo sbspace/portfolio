@@ -151,7 +151,7 @@ function sanitizeMemoHtml(value: string): string {
       const validFontSize = element.tagName === 'FONT' && name === 'size' && /^[1-7]$/.test(attributeValue);
       const validImageAttribute = element.tagName === 'IMG' && (
         name === 'src' || name === 'alt' ||
-        (name === 'style' && /^width:\s*(?:[1-9]|[1-9]\d|100)%;?$/.test(attributeValue))
+        (name === 'style' && /^width:\s*(?:100|[1-9]\d?(?:\.\d{1,2})?)%;?$/.test(attributeValue))
       );
       const validFontColor = element.tagName === 'FONT' && name === 'color' && /^#[0-9a-f]{6}$/i.test(attributeValue);
       const validAlignment =
@@ -195,7 +195,11 @@ function MemoEditor({ memo, onUpdate }: { memo: string; onUpdate: (content: stri
   const [pasteError, setPasteError] = useState('');
   const selectedImageRef = useRef<HTMLImageElement | null>(null);
   const lastMemoRef = useRef<string | null>(null);
-  const [imageWidth, setImageWidth] = useState<number | null>(null);
+  const imageWrapperRef = useRef<HTMLDivElement>(null);
+  const [imageBox, setImageBox] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  const dragRef = useRef<{
+    pointerId: number; x: number; y: number; width: number; ratio: number; originalStyle: string | null;
+  } | null>(null);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -204,7 +208,7 @@ function MemoEditor({ memo, onUpdate }: { memo: string; onUpdate: (content: stri
       lastMemoRef.current = memo;
       selectedImageRef.current = null;
       selectionRef.current = null;
-      setImageWidth(null);
+      setImageBox(null);
     }
   }, [memo]);
 
@@ -236,45 +240,99 @@ function MemoEditor({ memo, onUpdate }: { memo: string; onUpdate: (content: stri
     onUpdate(value);
     if (selectedImageRef.current && !editor.contains(selectedImageRef.current)) {
       selectedImageRef.current = null;
-      setImageWidth(null);
+      setImageBox(null);
     }
   }, [onUpdate]);
+
+  const updateImageBox = useCallback(() => {
+    const image = selectedImageRef.current;
+    const wrapper = imageWrapperRef.current;
+    if (!image || !wrapper || !editorRef.current?.contains(image)) {
+      selectedImageRef.current = null;
+      setImageBox(null);
+      return;
+    }
+    const rect = image.getBoundingClientRect();
+    const container = wrapper.getBoundingClientRect();
+    const box = { left: rect.left - container.left, top: rect.top - container.top, width: rect.width, height: rect.height };
+    setImageBox((previous) => previous && Object.keys(box).every((key) =>
+      previous[key as keyof typeof box] === box[key as keyof typeof box]) ? previous : box);
+  }, []);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const observer = new ResizeObserver(updateImageBox);
+    observer.observe(editor);
+    const mutations = new MutationObserver(updateImageBox);
+    mutations.observe(editor, { subtree: true, childList: true, attributes: true, characterData: true });
+    window.addEventListener('resize', updateImageBox);
+    window.addEventListener('scroll', updateImageBox, true);
+    editor.addEventListener('load', updateImageBox, true);
+    return () => {
+      observer.disconnect();
+      mutations.disconnect();
+      window.removeEventListener('resize', updateImageBox);
+      window.removeEventListener('scroll', updateImageBox, true);
+      editor.removeEventListener('load', updateImageBox, true);
+    };
+  }, [updateImageBox]);
 
   const clearImageSelection = () => {
     selectedImageRef.current?.removeAttribute('data-selected');
     selectedImageRef.current = null;
-    setImageWidth(null);
+    setImageBox(null);
   };
 
   const selectImage = (event: React.MouseEvent<HTMLDivElement>) => {
     clearImageSelection();
     if (!(event.target instanceof HTMLImageElement)) return;
-    const image = event.target;
-    selectedImageRef.current = image;
-    image.setAttribute('data-selected', 'true');
-    const editor = editorRef.current!;
-    const styles = window.getComputedStyle(editor);
-    const availableWidth = editor.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight);
-    setImageWidth(image.style.width.endsWith('%')
-      ? parseInt(image.style.width, 10)
-      : Math.max(1, Math.min(100, Math.round(image.getBoundingClientRect().width / Math.max(1, availableWidth) * 100))));
+    selectedImageRef.current = event.target;
+    event.target.setAttribute('data-selected', 'true');
+    updateImageBox();
   };
 
-  const resizeImage = (width: number | null) => {
+  const availableImageWidth = () => {
+    const editor = editorRef.current!;
+    const styles = window.getComputedStyle(editor);
+    return Math.max(1, editor.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight));
+  };
+
+  const beginImageResize = (event: React.PointerEvent<HTMLButtonElement>) => {
     const image = selectedImageRef.current;
-    if (!image || !editorRef.current?.contains(image)) {
-      clearImageSelection();
-      return;
+    if (!image || event.button !== 0) return;
+    event.preventDefault();
+    const rect = image.getBoundingClientRect();
+    dragRef.current = {
+      pointerId: event.pointerId, x: event.clientX, y: event.clientY,
+      width: rect.width, ratio: rect.height / Math.max(1, rect.width),
+      originalStyle: image.getAttribute('style'),
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const moveImageResize = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    const image = selectedImageRef.current;
+    if (!drag || !image || drag.pointerId !== event.pointerId) return;
+    const delta = ((event.clientX - drag.x) + (event.clientY - drag.y) * drag.ratio) / (1 + drag.ratio ** 2);
+    const width = Math.max(1, Math.min(100, (drag.width + delta) / availableImageWidth() * 100));
+    image.style.width = `${Math.round(width * 100) / 100}%`;
+    updateImageBox();
+  };
+
+  const finishImageResize = (event: React.PointerEvent<HTMLButtonElement>, cancel = false) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const image = selectedImageRef.current;
+    if (cancel && image) {
+      if (drag.originalStyle === null) image.removeAttribute('style');
+      else image.setAttribute('style', drag.originalStyle);
     }
-    if (width === null) {
-      image.removeAttribute('style');
-      clearImageSelection();
-    } else {
-      const nextWidth = Math.max(1, Math.min(100, Math.round(width)));
-      image.style.width = `${nextWidth}%`;
-      setImageWidth(nextWidth);
-    }
-    persistContent();
+    dragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    updateImageBox();
+    if (!cancel) persistContent();
   };
 
   const restoreSelection = () => {
@@ -348,7 +406,7 @@ function MemoEditor({ memo, onUpdate }: { memo: string; onUpdate: (content: stri
   return (
     <div>
       <SectionCard noPadding>
-        <p className="px-4 pt-3 text-xs text-slate-400">캡처 이미지는 Ctrl+V로 붙여넣고, 이미지를 클릭하면 크기를 조절할 수 있습니다.</p>
+        <p className="px-4 pt-3 text-xs text-slate-400">이미지를 클릭한 뒤 오른쪽 아래 모서리를 드래그하면 비율을 유지하며 크기를 조절할 수 있습니다.</p>
         {pastingImage && <p role="status" className="px-4 pt-2 text-xs text-indigo-600">이미지 처리 중…</p>}
         {pasteError && <p role="alert" className="px-4 pt-2 text-xs text-rose-600">{pasteError}</p>}
         <div className="flex flex-wrap items-center gap-1 border-b border-slate-100 bg-slate-50/70 p-2.5">
@@ -431,23 +489,7 @@ function MemoEditor({ memo, onUpdate }: { memo: string; onUpdate: (content: stri
           </button>
         </div>
 
-        {imageWidth !== null && (
-          <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 bg-indigo-50 px-4 py-3" role="group" aria-label="이미지 크기 조절">
-            <label className="flex items-center gap-2 text-xs font-medium text-indigo-700">
-              이미지 너비
-              <input type="range" aria-label="이미지 너비" min="1" max="100" value={imageWidth}
-                onChange={(event) => resizeImage(Number(event.target.value))} className="w-32 accent-indigo-600 sm:w-48" />
-              <span className="w-9 tabular-nums">{imageWidth}%</span>
-            </label>
-            {[25, 50, 75, 100].map((width) => (
-              <Button key={width} size="xs" variant={imageWidth === width ? 'primary' : 'secondary'}
-                onClick={() => resizeImage(width)}>{width}%</Button>
-            ))}
-            <Button size="xs" variant="ghost" onClick={() => resizeImage(null)}>원래 크기</Button>
-            <Button size="xs" variant="ghost" onClick={clearImageSelection}>완료</Button>
-            <span className="text-xs text-slate-500">본문 너비 기준 · 비율 유지 · 자동 저장</span>
-          </div>
-        )}
+        <div ref={imageWrapperRef} className="relative">
         <div
           ref={editorRef}
           contentEditable
@@ -459,8 +501,32 @@ function MemoEditor({ memo, onUpdate }: { memo: string; onUpdate: (content: stri
           onInput={persistContent}
           onPaste={handlePaste}
           onClick={selectImage}
+          onDragStart={(event) => { if (event.target instanceof HTMLImageElement) event.preventDefault(); }}
           className="min-h-[60vh] w-full overflow-y-auto p-5 text-sm leading-7 text-slate-700 outline-none empty:before:pointer-events-none empty:before:text-slate-300 empty:before:content-[attr(data-placeholder)] focus:ring-2 focus:ring-inset focus:ring-indigo-500 [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6 [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-lg [&_img]:cursor-pointer [&_img[data-selected]]:outline [&_img[data-selected]]:outline-2 [&_img[data-selected]]:outline-indigo-500"
         />
+          {imageBox && (
+            <div className="pointer-events-none absolute border-2 border-indigo-500" style={imageBox}>
+              <button type="button" aria-label="이미지 모서리 드래그로 크기 조절" title="드래그하여 크기 조절"
+                className="pointer-events-auto absolute -bottom-2 -right-2 h-4 w-4 touch-none cursor-nwse-resize rounded-sm border-2 border-white bg-indigo-600 shadow"
+                onPointerDown={beginImageResize} onPointerMove={moveImageResize}
+                onPointerUp={(event) => finishImageResize(event)}
+                onPointerCancel={(event) => finishImageResize(event, true)}
+                onLostPointerCapture={(event) => finishImageResize(event)}
+                onKeyDown={(event) => {
+                  const image = selectedImageRef.current;
+                  if (!image) return;
+                  if (event.key === 'Escape') { clearImageSelection(); return; }
+                  if (!['ArrowLeft', 'ArrowDown', 'ArrowRight', 'ArrowUp'].includes(event.key)) return;
+                  event.preventDefault();
+                  const delta = event.key === 'ArrowLeft' || event.key === 'ArrowDown' ? -5 : 5;
+                  const width = image.getBoundingClientRect().width / availableImageWidth() * 100;
+                  image.style.width = `${Math.max(1, Math.min(100, Math.round(width + delta)))}%`;
+                  updateImageBox();
+                  persistContent();
+                }} />
+            </div>
+          )}
+        </div>
       </SectionCard>
     </div>
   );
