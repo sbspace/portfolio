@@ -149,7 +149,10 @@ function sanitizeMemoHtml(value: string): string {
       const name = attribute.name.toLowerCase();
       const attributeValue = attribute.value.trim();
       const validFontSize = element.tagName === 'FONT' && name === 'size' && /^[1-7]$/.test(attributeValue);
-      const validImageAttribute = element.tagName === 'IMG' && (name === 'src' || name === 'alt');
+      const validImageAttribute = element.tagName === 'IMG' && (
+        name === 'src' || name === 'alt' ||
+        (name === 'style' && /^width:\s*(?:[1-9]|[1-9]\d|100)%;?$/.test(attributeValue))
+      );
       const validFontColor = element.tagName === 'FONT' && name === 'color' && /^#[0-9a-f]{6}$/i.test(attributeValue);
       const validAlignment =
         (element.tagName === 'DIV' || element.tagName === 'P') &&
@@ -190,11 +193,18 @@ function MemoEditor({ memo, onUpdate }: { memo: string; onUpdate: (content: stri
   const pastingRef = useRef(false);
   const [pastingImage, setPastingImage] = useState(false);
   const [pasteError, setPasteError] = useState('');
+  const selectedImageRef = useRef<HTMLImageElement | null>(null);
+  const lastMemoRef = useRef<string | null>(null);
+  const [imageWidth, setImageWidth] = useState<number | null>(null);
 
   useEffect(() => {
     const editor = editorRef.current;
-    if (editor && document.activeElement !== editor) {
+    if (editor && lastMemoRef.current !== memo) {
       editor.innerHTML = decodeMemo(memo);
+      lastMemoRef.current = memo;
+      selectedImageRef.current = null;
+      selectionRef.current = null;
+      setImageWidth(null);
     }
   }, [memo]);
 
@@ -221,8 +231,51 @@ function MemoEditor({ memo, onUpdate }: { memo: string; onUpdate: (content: stri
       .replace(/<div><\/div>/gi, '')
       .replace(/&nbsp;/gi, '')
       .trim();
-    onUpdate(textOnly ? `${RICH_TEXT_PREFIX}${sanitized}` : '');
+    const value = textOnly ? `${RICH_TEXT_PREFIX}${sanitized}` : '';
+    lastMemoRef.current = value;
+    onUpdate(value);
+    if (selectedImageRef.current && !editor.contains(selectedImageRef.current)) {
+      selectedImageRef.current = null;
+      setImageWidth(null);
+    }
   }, [onUpdate]);
+
+  const clearImageSelection = () => {
+    selectedImageRef.current?.removeAttribute('data-selected');
+    selectedImageRef.current = null;
+    setImageWidth(null);
+  };
+
+  const selectImage = (event: React.MouseEvent<HTMLDivElement>) => {
+    clearImageSelection();
+    if (!(event.target instanceof HTMLImageElement)) return;
+    const image = event.target;
+    selectedImageRef.current = image;
+    image.setAttribute('data-selected', 'true');
+    const editor = editorRef.current!;
+    const styles = window.getComputedStyle(editor);
+    const availableWidth = editor.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight);
+    setImageWidth(image.style.width.endsWith('%')
+      ? parseInt(image.style.width, 10)
+      : Math.max(1, Math.min(100, Math.round(image.getBoundingClientRect().width / Math.max(1, availableWidth) * 100))));
+  };
+
+  const resizeImage = (width: number | null) => {
+    const image = selectedImageRef.current;
+    if (!image || !editorRef.current?.contains(image)) {
+      clearImageSelection();
+      return;
+    }
+    if (width === null) {
+      image.removeAttribute('style');
+      clearImageSelection();
+    } else {
+      const nextWidth = Math.max(1, Math.min(100, Math.round(width)));
+      image.style.width = `${nextWidth}%`;
+      setImageWidth(nextWidth);
+    }
+    persistContent();
+  };
 
   const restoreSelection = () => {
     const editor = editorRef.current;
@@ -295,7 +348,7 @@ function MemoEditor({ memo, onUpdate }: { memo: string; onUpdate: (content: stri
   return (
     <div>
       <SectionCard noPadding>
-        <p className="px-4 pt-3 text-xs text-slate-400">캡처 이미지를 복사한 뒤 본문에서 Ctrl+V로 붙여넣을 수 있습니다.</p>
+        <p className="px-4 pt-3 text-xs text-slate-400">캡처 이미지는 Ctrl+V로 붙여넣고, 이미지를 클릭하면 크기를 조절할 수 있습니다.</p>
         {pastingImage && <p role="status" className="px-4 pt-2 text-xs text-indigo-600">이미지 처리 중…</p>}
         {pasteError && <p role="alert" className="px-4 pt-2 text-xs text-rose-600">{pasteError}</p>}
         <div className="flex flex-wrap items-center gap-1 border-b border-slate-100 bg-slate-50/70 p-2.5">
@@ -378,6 +431,23 @@ function MemoEditor({ memo, onUpdate }: { memo: string; onUpdate: (content: stri
           </button>
         </div>
 
+        {imageWidth !== null && (
+          <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 bg-indigo-50 px-4 py-3" role="group" aria-label="이미지 크기 조절">
+            <label className="flex items-center gap-2 text-xs font-medium text-indigo-700">
+              이미지 너비
+              <input type="range" aria-label="이미지 너비" min="1" max="100" value={imageWidth}
+                onChange={(event) => resizeImage(Number(event.target.value))} className="w-32 accent-indigo-600 sm:w-48" />
+              <span className="w-9 tabular-nums">{imageWidth}%</span>
+            </label>
+            {[25, 50, 75, 100].map((width) => (
+              <Button key={width} size="xs" variant={imageWidth === width ? 'primary' : 'secondary'}
+                onClick={() => resizeImage(width)}>{width}%</Button>
+            ))}
+            <Button size="xs" variant="ghost" onClick={() => resizeImage(null)}>원래 크기</Button>
+            <Button size="xs" variant="ghost" onClick={clearImageSelection}>완료</Button>
+            <span className="text-xs text-slate-500">본문 너비 기준 · 비율 유지 · 자동 저장</span>
+          </div>
+        )}
         <div
           ref={editorRef}
           contentEditable
@@ -388,7 +458,8 @@ function MemoEditor({ memo, onUpdate }: { memo: string; onUpdate: (content: stri
           data-placeholder="메모를 입력하세요..."
           onInput={persistContent}
           onPaste={handlePaste}
-          className="min-h-[60vh] w-full overflow-y-auto p-5 text-sm leading-7 text-slate-700 outline-none empty:before:pointer-events-none empty:before:text-slate-300 empty:before:content-[attr(data-placeholder)] focus:ring-2 focus:ring-inset focus:ring-indigo-500 [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6 [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-lg"
+          onClick={selectImage}
+          className="min-h-[60vh] w-full overflow-y-auto p-5 text-sm leading-7 text-slate-700 outline-none empty:before:pointer-events-none empty:before:text-slate-300 empty:before:content-[attr(data-placeholder)] focus:ring-2 focus:ring-inset focus:ring-indigo-500 [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6 [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-lg [&_img]:cursor-pointer [&_img[data-selected]]:outline [&_img[data-selected]]:outline-2 [&_img[data-selected]]:outline-indigo-500"
         />
       </SectionCard>
     </div>
